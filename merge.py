@@ -12,6 +12,7 @@ import math
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ===== 配置 =====
 SOURCES = [
@@ -239,6 +240,61 @@ def normalize_name(name):
     return n
 
 
+def test_stream_url(url, ua="", timeout=5):
+    """测试直播流URL是否可用"""
+    try:
+        req = Request(url, method="GET")
+        if ua:
+            req.add_header("User-Agent", ua)
+        else:
+            req.add_header("User-Agent", "AptvPlayer-UA")
+        resp = urlopen(req, timeout=timeout)
+        data = resp.read(4096)
+        text = data.decode("utf-8", errors="replace")
+        # 检查是否是有效M3U8
+        return "#EXT" in text
+    except Exception:
+        return False
+
+
+def test_urls_batch(channels, max_workers=20):
+    """批量测试URL，返回可用的频道列表"""
+    print(f"\n[测试] 开始流测试 ({len(channels)} 个URL, {max_workers} 并发)...")
+
+    # 去重URL
+    seen = {}
+    unique = []
+    for ch in channels:
+        key = ch["url"].split("?")[0]
+        if key not in seen:
+            seen[key] = ch
+            unique.append(ch)
+
+    print(f"[测试] 去重后 {len(unique)} 个唯一URL")
+
+    tested = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        fut_map = {}
+        for ch in unique:
+            fut = pool.submit(test_stream_url, ch["url"], ch["ua"])
+            fut_map[fut] = ch
+
+        done = 0
+        for fut in as_completed(fut_map):
+            ch = fut_map[fut]
+            ok = fut.result()
+            tested[ch["url"]] = ok
+            done += 1
+            if done % 50 == 0:
+                print(f"[测试] 进度: {done}/{len(unique)}")
+
+    # 过滤
+    working = [ch for ch in channels if tested.get(ch["url"], False)]
+    dead = len(channels) - len(working)
+    print(f"[测试] 完成: {len(working)} 可用, {dead} 不可用")
+    return working
+
+
 def natural_sort_key(name):
     """自然排序：CCTV2 < CCTV10"""
     parts = re.split(r'(\d+)', name)
@@ -438,10 +494,13 @@ def main():
 
     print(f"\n[汇总] 3 个源合并后共 {len(all_channels)} 条频道")
 
-    # 2. 去重
+    # 2. 流测试（过滤不可用的URL）
+    all_channels = test_urls_batch(all_channels, max_workers=20)
+
+    # 3. 去重
     deduped = deduplicate(all_channels)
 
-    # 3. 分类
+    # 4. 分类
     categorized = categorize(deduped)
 
     # 4. 统计
