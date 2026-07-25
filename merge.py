@@ -333,6 +333,9 @@ def generate_m3u(categories):
                 extinf_parts.append(f'tvg-logo="{main["logo"]}"')
             # group-title 用分组名
             extinf_parts.append(f'group-title="{cat_name}"')
+            # user-agent（部分源需要特定UA才能访问）
+            if main["ua"]:
+                extinf_parts.append(f'user-agent="{main["ua"]}"')
 
             quality_tag = ""
             if main["quality"] >= 100:
@@ -354,6 +357,8 @@ def generate_m3u(categories):
 
                 backup_name = f'{backup["name"]}-备用{idx+1}'
                 bk_extinf = f'tvg-id="{backup["tvg_id"]}" group-title="{cat_name}"'
+                if backup["ua"]:
+                    bk_extinf += f' user-agent="{backup["ua"]}"'
                 lines.append(f'#EXTINF:-1 {bk_extinf},{backup_name}{bq_tag}')
                 lines.append(backup["url"])
 
