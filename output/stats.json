@@ -1,12 +1,12 @@
 {
   "sources": 3,
-  "total_channels": 163,
+  "total_channels": 117,
   "categories": {
-    "央视频道": 21,
-    "卫视4K频道": 12,
-    "卫视频道": 42,
-    "其他频道": 44,
-    "历年春晚": 44
+    "央视频道": 31,
+    "卫视4K频道": 4,
+    "卫视频道": 41,
+    "其他频道": 38,
+    "历年春晚": 3
   },
   "generated_file": "/Users/bowin/Desktop/生产力/workbuddy/iptv-china/output/china.m3u"
 }
