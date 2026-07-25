@@ -8,6 +8,7 @@ import re
 import sys
 import json
 import os
+import math
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 from collections import defaultdict
@@ -238,6 +239,18 @@ def normalize_name(name):
     return n
 
 
+def natural_sort_key(name):
+    """自然排序：CCTV2 < CCTV10"""
+    parts = re.split(r'(\d+)', name)
+    result = []
+    for p in parts:
+        if p.isdigit():
+            result.append((0, int(p)))  # 数字按数值比较
+        else:
+            result.append((1, p))       # 文字按字符串比较
+    return result
+
+
 def deduplicate(channels):
     """
     频道去重：按统一后的频道名分组（兼容不同源的 tvg-id 差异）
@@ -258,7 +271,7 @@ def deduplicate(channels):
     result = []
     dedup_stats = {"total_groups": 0, "with_backup": 0}
 
-    for ch_name, items in sorted(grouped.items()):
+    for ch_name, items in sorted(grouped.items(), key=lambda x: natural_sort_key(x[0])):
         # 按质量评分降序排列
         items.sort(key=lambda x: (-x["quality"], x["source"]))
 
