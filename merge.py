@@ -119,11 +119,13 @@ def parse_m3u(content, source_name=""):
             if logo_match:
                 tvg_logo = logo_match.group(1)
 
-            # 提取 UA 信息
+            # 提取 UA 信息（兼容 user-agent 和 http-user-agent）
             ua = ""
-            ua_match = re.search(r'user-agent="([^"]*)"', extinf)
-            if ua_match:
-                ua = ua_match.group(1)
+            for ua_pat in [r'user-agent="([^"]*)"', r'http-user-agent="([^"]*)"']:
+                ua_m = re.search(ua_pat, extinf)
+                if ua_m:
+                    ua = ua_m.group(1)
+                    break
 
             # 获取 URL（下一行）
             i += 1
@@ -361,8 +363,7 @@ def generate_m3u(categories):
             extinf_parts.append(f'group-title="{cat_name}"')
             # user-agent（部分源需要特定UA才能访问）
             if main["ua"]:
-                # 使用 #EXTVLCOPT 格式（兼容性更好）
-                lines.append(f'#EXTVLCOPT:http-user-agent={main["ua"]}')
+                extinf_parts.append(f'http-user-agent="{main["ua"]}"')
 
             quality_tag = ""
             if main["quality"] >= 100:
@@ -384,9 +385,9 @@ def generate_m3u(categories):
 
                 backup_name = f'{backup["name"]}-备用{idx+1}'
                 bk_extinf = f'tvg-id="{backup["tvg_id"]}" group-title="{cat_name}"'
-                lines.append(f'#EXTINF:-1 {bk_extinf},{backup_name}{bq_tag}')
                 if backup["ua"]:
-                    lines.append(f'#EXTVLCOPT:http-user-agent={backup["ua"]}')
+                    bk_extinf += f' http-user-agent="{backup["ua"]}"'
+                lines.append(f'#EXTINF:-1 {bk_extinf},{backup_name}{bq_tag}')
                 lines.append(backup["url"])
 
     return "\n".join(lines)
