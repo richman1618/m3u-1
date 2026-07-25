@@ -132,7 +132,7 @@ def parse_m3u(content, source_name=""):
                 if url and not url.startswith("#"):
                     # 计算质量评分
                     quality_score = calc_quality_score(
-                        channel_name, group_title, url, ua, extinf
+                        channel_name, group_title, url, ua, extinf, source_name
                     )
 
                     channels.append({
@@ -154,9 +154,20 @@ def parse_m3u(content, source_name=""):
     return channels
 
 
-def calc_quality_score(name, group, url, ua, extinf):
+# 源优先级（越高越优先）
+SOURCE_PRIORITY = {
+    "de聚合IPTV": 30,   # 官方咪咕CDN，最稳定
+    "aptv iptv": 20,    # 综合源
+    "it聚合iptv": 10,   # 聚合代理源
+}
+
+
+def calc_quality_score(name, group, url, ua, extinf, source=""):
     """计算频道质量评分（越高越好）"""
     score = 0
+
+    # 源优先级加分
+    score += SOURCE_PRIORITY.get(source, 0)
 
     # 4K/8K 加分
     if "4K" in name or "4K" in group or "4k" in url.lower():
@@ -215,16 +226,31 @@ def should_include(name, group):
     return False
 
 
+def normalize_name(name):
+    """统一频道名：去除后缀差异，方便跨源匹配"""
+    n = name.strip()
+    # 去除 综合、高清、超清、HD 等后缀
+    n = re.sub(r'(综合|高清|超清|HD|hd|超清|标清)$', '', n)
+    # 去除空格
+    n = n.strip()
+    return n
+
+
 def deduplicate(channels):
     """
-    频道去重：按 tvg_id 分组，每个频道保留 1 主 + 最多 3 备用
+    频道去重：按统一后的频道名分组（兼容不同源的 tvg-id 差异）
+    每个频道保留 1 主 + 最多 3 备用
     主用 = 质量评分最高的
     备用 = 评分次高的，不同来源/不同URL
     """
     grouped = defaultdict(list)
 
     for ch in channels:
+        # 先尝试用 tvg_id，再尝试用频道名
         key = ch["tvg_id"]
+        # 如果 tvg_id 含特殊字符，用归一化后的名称
+        if "综合" in key or "高清" in key or "超清" in key:
+            key = normalize_name(ch["name"])
         grouped[key].append(ch)
 
     result = []
@@ -335,7 +361,8 @@ def generate_m3u(categories):
             extinf_parts.append(f'group-title="{cat_name}"')
             # user-agent（部分源需要特定UA才能访问）
             if main["ua"]:
-                extinf_parts.append(f'user-agent="{main["ua"]}"')
+                # 使用 #EXTVLCOPT 格式（兼容性更好）
+                lines.append(f'#EXTVLCOPT:http-user-agent={main["ua"]}')
 
             quality_tag = ""
             if main["quality"] >= 100:
@@ -357,9 +384,9 @@ def generate_m3u(categories):
 
                 backup_name = f'{backup["name"]}-备用{idx+1}'
                 bk_extinf = f'tvg-id="{backup["tvg_id"]}" group-title="{cat_name}"'
-                if backup["ua"]:
-                    bk_extinf += f' user-agent="{backup["ua"]}"'
                 lines.append(f'#EXTINF:-1 {bk_extinf},{backup_name}{bq_tag}')
+                if backup["ua"]:
+                    lines.append(f'#EXTVLCOPT:http-user-agent={backup["ua"]}')
                 lines.append(backup["url"])
 
     return "\n".join(lines)
