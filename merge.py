@@ -303,15 +303,12 @@ def categorize(channel_data):
 
 
 def generate_m3u(categories):
-    """生成最终的 M3U 文件内容"""
+    """生成标准的 M3U 文件内容"""
     lines = []
-    lines.append('#EXTM3U')
-    if EPG_URL:
-        lines.append(f'#EXTM3U x-tvg-url="{EPG_URL}"')
-    lines.append(f'# 生成时间: 自动合并自 3 个公开 IPTV 源')
-    lines.append(f'# 仅保留 CCTV + 卫视 + 4K + 春晚，剔除港澳台境外频道')
-    lines.append(f'# 每个频道: 1 主 + 最多 3 备用')
-    lines.append('')
+
+    # 只有一行 #EXTM3U（合并所有参数）
+    epg_attr = f' x-tvg-url="{EPG_URL}"' if EPG_URL else ''
+    lines.append(f'#EXTM3U{epg_attr}')
 
     category_order = ["央视频道", "卫视4K频道", "卫视频道", "其他频道", "历年春晚"]
 
@@ -320,14 +317,13 @@ def generate_m3u(categories):
         if not items:
             continue
 
-        lines.append(f'')
-        lines.append(f'# ===== {cat_name} =====')
-        lines.append(f'')
+        # 分组标题用 #EXTGRP（标准格式）
+        lines.append(f'#EXTGRP:{cat_name}')
 
         for item in items:
             main = item["main"]
 
-            # 主用
+            # 主用 - 只保留标准属性，去掉 user-agent 等非标属性
             extinf_parts = []
             if main["tvg_id"]:
                 extinf_parts.append(f'tvg-id="{main["tvg_id"]}"')
@@ -335,9 +331,8 @@ def generate_m3u(categories):
                 extinf_parts.append(f'tvg-name="{main["tvg_name"]}"')
             if main["logo"]:
                 extinf_parts.append(f'tvg-logo="{main["logo"]}"')
+            # group-title 用分组名
             extinf_parts.append(f'group-title="{cat_name}"')
-            if main["ua"]:
-                extinf_parts.append(f'user-agent="{main["ua"]}"')
 
             quality_tag = ""
             if main["quality"] >= 100:
@@ -358,10 +353,10 @@ def generate_m3u(categories):
                     bq_tag = " ★高清"
 
                 backup_name = f'{backup["name"]}-备用{idx+1}'
-                lines.append(f'#EXTINF:-1 tvg-id="{backup["tvg_id"]}" group-title="{cat_name}",{backup_name}{bq_tag}')
+                bk_extinf = f'tvg-id="{backup["tvg_id"]}" group-title="{cat_name}"'
+                lines.append(f'#EXTINF:-1 {bk_extinf},{backup_name}{bq_tag}')
                 lines.append(backup["url"])
 
-    lines.append('')
     return "\n".join(lines)
 
 
